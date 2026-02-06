@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🦅 MXO DIRECT MATCH v2.0 - Momentum Edition</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2196F3">
+  <style>
+    body {
+      background: #0b0b0b;
+      color: #eaeaea;
+      font-family: Arial, sans-serif;
+      padding: 12px;
+      margin: 0;
+      user-select: none;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      border: 2px solid #333;
+      padding: 12px;
+      border-radius: 8px;
+    }
+    h1, h2, .label {
+      margin: 6px 0;
+      font-size: 16px;
+      font-weight: normal;
+    }
+    .history-line {
+      font-family: monospace;
+      margin: 2px 0;
+      min-height: 18px;
+    }
+    .btn-row {      display: flex;
+      gap: 8px;
+      margin: 10px 0;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;      
+      font-size: 14px;
+    }
+    .btn-B { background: #2196F3; color: white; }
+    .btn-P { background: #FF9800; color: black; }
+    .btn-win { background: #4CAF50; color: white; flex: 1; }
+    .btn-lose { background: #F44336; color: white; flex: 1; }    
+    .btn-undo { background: #9E9E9E; color: black; flex: 1; }
+    .trigger { color: gold; font-weight: bold; margin: 6px 0; min-height: 20px; }
+    .status { margin: 6px 0; }
+    .streak-info { color: #4CAF50; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🦅 MXO DIRECT MATCH v2.0</h1>
+    <h2>🟦 1.5x Zone • 🟪 2.0x+ Zone (Streak Lock)</h2>
+
+    <div class="label">Buffer: <span id="bufferText">[]</span></div>
+
+    <div class="history-line" id="hist1"></div>
+    <div class="history-line" id="hist2"></div>
+    <div class="history-line" id="hist3"></div>
+
+    <div class="status" id="status">🚦 WAITING</div>
+    <div class="trigger" id="trigger"></div>
+    <div class="streak-info" id="streakInfo">Current Win Streak: 0</div>
+    <div class="label" id="stats">🎯 Win: 0   ❌ Lose: 0   📊 Accuracy: --%</div>
+
+    <div class="btn-row">
+      <button class="btn-B" onclick="press('B')">B</button>
+      <button class="btn-P" onclick="press('P')">P</button>
+      <button class="btn-undo" onclick="undo()">↶ UNDO</button>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-win" onclick="win()">WIN 🎯</button>
+      <button class="btn-lose" onclick="lose()">LOSE ❌</button>
+    </div>
+  </div>
+  <script>
+    const BUCKET_15 = [1.20, 1.25, 1.30, 1.35, 1.40, 1.45, 1.50, 1.55, 1.60, 1.70];
+    const BUCKET_20_STD = [1.40, 1.45, 1.50, 1.55, 1.60, 1.65, 1.70, 1.75, 1.80, 1.85, 1.90, 1.95, 2.00];
+    const BUCKET_MOMENTUM = [2.50, 3.00];
+
+    const PATTERNS = {
+      "BPBPB": {trigger: "1.5x", index: 4, color: "🟦"},
+      "BBPBB": {trigger: "1.5x", index: 4, color: "🟦"},
+      "BBBPBBB": {trigger: "1.5x", index: 6, color: "🟦"},
+      "BBBBPBBBB": {trigger: "2x", index: 8, color: "🟪"},
+      "PPBPPB": {trigger: "2x", index: 5, color: "🟪"},
+      "BBPPBPBB": {trigger: "1.5x", index: 7, color: "🟦"},
+      "BBBPPBPBBB": {trigger: "1.5x", index: 9, color: "🟦"},
+      "BBPPPBP": {trigger: "2x", index: 6, color: "🟪"},
+      "PPBBP": {trigger: "2x", index: 4, color: "🟪"},
+      "PBPPB": {trigger: "1.5x", index: 4, color: "🟦"},
+      "PPBPPPB": {trigger: "2x", index: 6, color: "🟪"},
+      "PPPBPPPPB": {trigger: "2x", index: 8, color: "🟪"},
+      "PBBBPPBBB": {trigger: "2x", index: 8, color: "🟪"},
+      "BPPBPP": {trigger: "1.5x", index: 5, color: "🟦"},
+      "BBPPBB": {trigger: "2x", index: 5, color: "🟪"},
+      "BBBPPBBB": {trigger: "2x", index: 7, color: "🟪"},
+      "BPBPPBPB": {trigger: "2x", index: 7, color: "🟪"},
+      "BBPBBPPBB": {trigger: "2x", index: 8, color: "🟪"},
+      "BBBPPBPPBBB": {trigger: "2x", index: 10,color: "🟪"},
+      "PBPPPBP": {trigger: "2x", index: 6, color: "🟪"},
+      "PPBPPPPB": {trigger: "2x", index: 7, color: "🟪"},
+      "PPPBBPPPPPBB": {trigger: "2x", index: 11,color: "🟪"},
+      "BPPBPPBP": {trigger: "2x", index: 7, color: "🟪"},
+      "BPBBPPBPBB": {trigger: "2x", index: 9, color: "🟪"},
+      "PBBPPPBBP": {trigger: "2x", index: 8, color: "🟪"},
+    };
+
+    let history = [];
+    let wins = 0;
+    let losses = 0;
+    let winStreak = 0;
+    let armed = false;
+
+    const bufferEl = document.getElementById("bufferText");
+    const statusEl = document.getElementById("status");
+    const triggerEl = document.getElementById("trigger");
+    const statsEl = document.getElementById("stats");
+    const streakEl = document.getElementById("streakInfo");
+    const hist1 = document.getElementById("hist1");
+    const hist2 = document.getElementById("hist2");
+    const hist3 = document.getElementById("hist3");
+
+    function getRandomCoef(type) {      if (type === "1.5x") {
+        return BUCKET_15[Math.floor(Math.random() * BUCKET_15.length)];
+      } else {
+        let pool = [...BUCKET_20_STD];
+        if (winStreak >= 3) {
+          pool = pool.concat(BUCKET_MOMENTUM);
+        }
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+    }
+
+    function press(signal) {
+      if (armed) return;
+      history.push(signal);
+      updateAll();
+      const buffer = history.slice(-15).join("");
+      
+      const matches = findMatches(buffer);
+      if (matches.length > 0) {
+        const match = matches[0];
+        const coef = getRandomCoef(match.trigger);
+        const momentumTag = (winStreak >= 3 && (coef >= 2.5)) ? "🚀 MOMENTUM" : "";
+        
+        triggerEl.textContent = `${match.color} TARGET: ${coef.toFixed(2)}x ${momentumTag}`;
+        statusEl.textContent = "🚨 TRIGGER FIRED";
+        armed = true;
+      } else {
+        statusEl.textContent = `🔍 Scanning...`;
+      }
+    }
+
+    function win() {
+      if (!armed) return;
+      wins++;
+      winStreak++;
+      updateAll();
+      autoReset();
+    }
+
+    function lose() {
+      if (!armed) return;
+      losses++;
+      winStreak = 0;
+      updateAll();
+      autoReset();
+    }
+
+    function undo() {
+      if (history.length > 0) {
+        history.pop();        autoReset();
+        updateAll();
+      }
+    }
+
+    function updateAll() {
+      const buffer = history.slice(-15).join("");
+      bufferEl.textContent = buffer ? `[${buffer}]` : "[]";
+      
+      const total = wins + losses;
+      const acc = total === 0 ? "--" : ((wins / total) * 100).toFixed(1);
+      statsEl.textContent = `🎯 Win: ${wins}   ❌ Lose: ${losses}   📊 Accuracy: ${acc}%`;
+      streakEl.textContent = `Current Win Streak: ${winStreak}`;
+      
+      const recent = history.slice(-15).join("");
+      hist1.textContent = recent.slice(0, 5) ? `History: ${recent.slice(0, 5)}` : "";
+      hist2.textContent = recent.slice(5, 10) ? `        ${recent.slice(5, 10)}` : "";
+      hist3.textContent = recent.slice(10, 15) ? `        ${recent.slice(10, 15)}` : "";
+    }
+
+    function findMatches(buffer) {
+      return Object.entries(PATTERNS)
+        .filter(([pattern]) => buffer.endsWith(pattern))
+        .map(([_, data]) => data);
+    }
+
+    function autoReset() {
+      armed = false;
+      statusEl.textContent = "🚦 WAITING";
+      triggerEl.textContent = "";
+    }
+
+    updateAll();
+  </script>
+</body>
+</html>

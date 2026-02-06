@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Aviator Bot</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{background:#000;color:#fff;font-family:sans-serif;text-align:center;overflow:hidden;height:100vh;display:flex;flex-direction:column}.container{padding:10px;max-height:100%;overflow:hidden;display:flex;flex-direction:column}h1{font-size:20px;margin:8px 0;color:#1e90ff}.footer{font-size:14px;color:#a0a0a0;margin:5px 0}.box{border:2px solid #444;border-radius:12px;padding:10px;margin:8px 0;width:100%;flex-shrink:0}.buffer{font-size:20px;line-height:1.3;min-height:110px}.notice{font-size:18px;min-height:60px;display:flex;align-items:center;justify-content:center;text-align:center}button{font-size:15px;padding:8px 14px;margin:5px;border:none;border-radius:8px;cursor:pointer}.blue{background:#1e90ff;color:#fff}.purple{background:#a020f0;color:#fff}.win{background:#00c853;color:#fff}.lose{background:#d50000;color:#fff}.undo{background:#ffa500;color:#000}.highlight{background:#ffd700;border-radius:50%;padding:0 2px}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🚀 Adaptive Mining Aviator Bot</h1>
+  <div class="footer">🧠 Engineered by Mxolisi Camagu</div>
+
+  <div class="box">
+    <b>Buffer:</b>
+    <div id="buffer" class="buffer"></div>
+  </div>
+
+  <div class="box">
+    <div id="prediction" class="notice">🚨No Pattern Detected🚨</div>
+  </div>
+
+  <div class="box stats">
+    Bot Accuracy: <span id="accuracy">0</span>%<br>
+    Stats: Win+<span id="wins">0</span> 🎯 Lose-<span id="losses">0</span> ❌️<br>
+    •Pattern trigger stats: <span id="cycleCount">0</span>
+  </div>
+
+  <div class="box">
+    <button id="winBtn" class="win">Win</button>
+    <button id="loseBtn" class="lose">Lose</button><br>
+    <button id="blueBtn" class="blue">Blue</button>
+    <button id="purpleBtn" class="purple">Purple</button>
+    <button id="undoBtn" class="undo">Undo</button>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  let buffer = [];
+  let wins = 0, losses = 0;
+  let isTriggered = false;
+  let activeIdx = -1;
+  let activeIsMined = false;
+  let highlightedIndices = new Set();
+  let minedPatterns = [];
+  const MAIN_PATTERNS = [
+    {p:"BBPBPB",min:1.6,max:3.0},{p:"BPPBPB",min:1.3,max:2.5},{p:"BBPPBB",min:1.4,max:2.0},
+    {p:"PPBPBBP",min:1.5,max:2.0},{p:"BBBPBBB",min:1.2,max:1.5},{p:"PPPBP",min:1.5,max:2.0},
+    {p:"PBBBP",min:1.10,max:1.6},{p:"BPPPB",min:1.5,max:2.2},{p:"PBBBPB",min:1.10,max:1.5},
+    {p:"BBPPBP",min:1.4,max:2.10},{p:"PBBPB",min:1.17,max:1.6},{p:"BPBPPB",min:1.3,max:2.3},
+    {p:"PBPBBPBP",min:1.4,max:1.95},{p:"BPBPPBPPB",min:1.6,max:2.3},{p:"BPBBBPBPB",min:1.6,max:3.2},
+    {p:"PPPPPBBB",min:1.5,max:2.5},{p:"BPPBBP",min:1.3,max:2.10},{p:"PPPPBPP",min:1.4,max:2.05},
+    {p:"PPPPBBP",min:1.6,max:2.3},{p:"BPBPBBPP",min:1.6,max:2.4}
+  ].map(item => ({
+    pattern: item.p,
+    baseMin: item.min,
+    baseMax: item.max,
+    currentCoeff: (item.min + item.max) / 2,
+    wins: 0,
+    losses: 0,
+    lossStreak: 0,
+    status: "active"
+  }));
+
+  const winBtn = document.getElementById('winBtn');
+  const loseBtn = document.getElementById('loseBtn');
+  const blueBtn = document.getElementById('blueBtn');
+  const purpleBtn = document.getElementById('purpleBtn');
+  const undoBtn = document.getElementById('undoBtn');
+
+  winBtn.disabled = true;
+  loseBtn.disabled = true;
+
+  function renderBuffer() {
+    let html = '';
+    for (let i = 0; i < 20; i++) {
+      let symbol = '-';
+      if (i < buffer.length) symbol = buffer[i] === 'B' ? '💙' : '💜';
+      let cls = highlightedIndices.has(i) ? ' class="highlight"' : '';
+      html += `<span${cls}>${symbol}</span>`;
+      if ((i + 1) % 5 === 0) html += '<br>';
+    }
+    document.getElementById('buffer').innerHTML = html;
+  }
+
+  function clearHighlights(){highlightedIndices.clear();renderBuffer();}
+  function highlightPattern(pattern){
+    highlightedIndices.clear();
+    const start = buffer.length - pattern.length;
+    for(let i=0;i<pattern.length;i++){
+      const idx=start+i;
+      if(idx>=0&&idx<20)highlightedIndices.add(idx);
+    }
+    renderBuffer();
+  }
+
+  function checkForTrigger(){
+    const fullSeq=buffer.join('');
+    for(let i=0;i<MAIN_PATTERNS.length;i++){
+      const pat=MAIN_PATTERNS[i];
+      if(pat.status!=="active")continue;
+      if(fullSeq.endsWith(pat.pattern)){trigger(pat,i,false);return true;}
+    }
+    for(let i=0;i<minedPatterns.length;i++){
+      const pat=minedPatterns[i];
+      if(pat.status!=="active")continue;
+      if(fullSeq.endsWith(pat.pattern)){trigger(pat,i,true);return true;}
+    }
+    return false;
+  }
+
+  function trigger(pat,index,isMined){
+    const coeff=parseFloat(pat.currentCoeff.toFixed(2));
+    document.getElementById('prediction').innerHTML=`🔔BET💜PURPLE💜NOW🔔<br>🚀🟢Cashout @ ${coeff}x🟢🚀`;
+    winBtn.disabled=false;loseBtn.disabled=false;
+    isTriggered=true;activeIdx=index;activeIsMined=isMined;
+    highlightPattern(pat.pattern);
+  }
+
+  function addSignal(color){
+    if(isTriggered||!winBtn.disabled){
+      document.getElementById('prediction').innerHTML="🚨No Pattern Detected🚨";
+      winBtn.disabled=true;loseBtn.disabled=true;isTriggered=false;clearHighlights();
+    }
+    buffer.push(color);if(buffer.length>20)buffer.shift();renderBuffer();
+    if(!checkForTrigger())document.getElementById('prediction').innerHTML="🚨No Pattern Detected🚨";
+  }
+
+  function mineRecoveryPattern(failedPattern){
+    const outcomeIndex=buffer.length-failedPattern.length;
+    if(outcomeIndex<0)return;
+    const extraLen=Math.min(3,buffer.length-outcomeIndex);
+    if(extraLen<=0)return;
+    const recoverySeq=buffer.slice(outcomeIndex,outcomeIndex+extraLen+failedPattern.length).join("");
+    if(recoverySeq.length<6)return;
+    if(minedPatterns.some(p=>p.pattern===recoverySeq))return;
+    minedPatterns.push({pattern:recoverySeq,baseMin:1.3,baseMax:2.0,currentCoeff:1.5,wins:0,losses:0,lossStreak:0,status:"active"});
+  }
+
+  function recordResult(isWin){
+    if(activeIdx===-1)return;
+    const registry=activeIsMined?minedPatterns:MAIN_PATTERNS;
+    const pat=registry[activeIdx];
+    if(isWin){
+      wins++;pat.wins++;pat.lossStreak=0;pat.currentCoeff=Math.max(pat.baseMin,pat.currentCoeff-0.05);
+      document.getElementById('prediction').innerHTML="🎯Win💰 🏃‍♀️🏃🏃‍♂️Win🎯";
+    }else{
+      losses++;pat.losses++;pat.lossStreak++;pat.currentCoeff=Math.max(pat.baseMin,pat.currentCoeff-0.1);
+      if(pat.lossStreak>=3){pat.status="quarantined";mineRecoveryPattern(pat.pattern);}
+      document.getElementById('prediction').innerHTML="😭Lose💙❌️😭";
+    }
+    let total=wins+losses;
+    document.getElementById('wins').innerText=wins;
+    document.getElementById('losses').innerText=losses;
+    document.getElementById('accuracy').innerText=total?Math.round((wins/total)*100):0;
+    winBtn.disabled=true;loseBtn.disabled=true;
+  }
+
+  function undo(){
+    if(isTriggered||!winBtn.disabled)return;
+    if(buffer.length>0){buffer.pop();renderBuffer();document.getElementById('prediction').innerHTML="🚨No Pattern Detected🚨";}
+  }
+
+  blueBtn.addEventListener('click',()=>addSignal('B'));
+  purpleBtn.addEventListener('click',()=>addSignal('P'));
+  winBtn.addEventListener('click',()=>recordResult(true));
+  loseBtn.addEventListener('click',()=>recordResult(false));
+  undoBtn.addEventListener('click',undo);
+
+  renderBuffer();document.getElementById('cycleCount').innerText="0";
+});
+</script>
+</body>
+</html>
